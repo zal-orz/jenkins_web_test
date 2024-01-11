@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: flask-hello-world-pod
+  namespace: kube-mlops
+  labels:
+    app: flask-hello-world
+spec:
+  containers:
+  - name: flask-app
+    image: flask-hello-world
+    imagePullPolicy: IfNotPresent
+    ports:
+    - containerPort: 5000
