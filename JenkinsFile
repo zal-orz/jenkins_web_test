@@ -1,0 +1,73 @@
+pipeline {
+    
+    agent {label 'jnlp-slave'}
+
+    stages {
+        stage('git clone') {
+            steps {
+                container('tools'){
+                    sh "git config --global http.proxy socks5://133.133.133.111:7899"
+                    sh "git config --global https.proxy socks5://133.133.133.111:7899"
+                    sh "rm -rf *"
+                    retry(3){sh "git clone https://github.com/zal-orz/jenkins_web_test.git"}
+                    sh "ls"
+                }
+                echo 'git clone finish'
+            }
+        }
+        stage('Build Docker Image') {
+            steps {
+                container('tools'){
+                    dir('jenkins_web_test/'){
+                       script {
+                            dockerImage = docker.build('flask-hello-world')
+                        }
+                    }
+                }
+                echo 'image build finish'
+            }
+        }
+        stage('Run Container') {
+            steps {
+                container('tools'){
+                    dir('jenkins_web_test/'){
+                        script {
+                            sh "kubectl apply -f flask-pod.yaml"
+                            sh "kubectl apply -f flask-service.yaml"
+                        }
+                    }
+                }
+                echo 'web service running'
+            }
+        }
+        
+        stage('User Input') {
+            steps {
+                timeout(time: 10, unit: 'MINUTES') {
+                    script {
+                        def userInput = "No"
+
+                        while (userInput != 'Yes') {
+                            userInput = input(
+                                id: 'userInput',
+                                message: 'Do you want to stop and clean up the container? (Enter "Yes" to proceed)',
+                                parameters: [choice(choices: ['Yes', 'No'], description: 'Choose an option', name: 'CLEANUP')]
+                            )
+                        }
+
+                        // 停止和清理 Docker 容器
+                        container('tools') {
+                            dir('jenkins_web_test/'){
+                                script {
+                                    sh "kubectl delete -f flask-pod.yaml"
+                                    sh "kubectl delete -f flask-service.yaml"
+                                }
+                            }
+                        }
+                        echo 'web service stopped and cleaned up.'
+                    }
+                }
+            }
+        }
+    }
+}
